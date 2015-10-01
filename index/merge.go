@@ -26,7 +26,7 @@ package index
 // Now merge the posting lists (this is why they begin with the trigram).
 // During the merge, translate the docid numbers to the new C docid space.
 // Also during the merge, write the posting list index to a temporary file as usual.
-// 
+//
 // Copy the name index and posting list index into C's index and write the trailer.
 // Rename C's index onto the new index.
 
@@ -55,6 +55,8 @@ func Merge(dst, src1, src2 string) {
 	ix2 := Open(src2)
 	paths1 := ix1.Paths()
 	paths2 := ix2.Paths()
+	ignores1 := ix1.Ignores()
+	ignores2 := ix2.Ignores()
 
 	// Build docid maps.
 	var i1, i2, new uint32
@@ -127,6 +129,22 @@ func Merge(dst, src1, src2 string) {
 		last = p
 		ix3.writeString(p)
 		ix3.writeString("\x00")
+	}
+	ix3.writeString("\x00")
+
+	// Merged list of ignores
+	ignoreData := ix3.offset()
+	igm := make(map[string]bool)
+	for _, ip := range ignores1 {
+		ix3.writeString(ip)
+		ix3.writeString("\x00")
+		igm[ip] = true
+	}
+	for _, ip := range ignores2 {
+		if _, ok := igm[ip]; !ok {
+			ix3.writeString(ip)
+			ix3.writeString("\x00")
+		}
 	}
 	ix3.writeString("\x00")
 
@@ -220,6 +238,7 @@ func Merge(dst, src1, src2 string) {
 	copyFile(ix3, w.postIndexFile)
 
 	ix3.writeUint32(pathData)
+	ix3.writeUint32(ignoreData)
 	ix3.writeUint32(nameData)
 	ix3.writeUint32(postData)
 	ix3.writeUint32(nameIndex)

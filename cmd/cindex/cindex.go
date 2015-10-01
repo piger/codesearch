@@ -14,9 +14,10 @@ import (
 	"sort"
 
 	"github.com/piger/codesearch/index"
+	"github.com/piger/codesearch/regexp"
 )
 
-var usageMessage = `usage: cindex [-list] [-reset] [path...]
+var usageMessage = `usage: cindex [-list] [-reset] [-ignore <REGEXP>] [path...]
 
 Cindex prepares the trigram index for use by csearch.  The index is the
 file named by $CSEARCHINDEX, or else $HOME/.csearchindex.
@@ -41,6 +42,9 @@ itself is a useful command to run in a nightly cron job.
 
 The -list flag causes cindex to list the paths it has indexed and exit.
 
+The -ignore flag can be used to specify one or more regular expressions to exclude
+the matching filenames from the indexing process.
+
 By default cindex adds the named paths to the index but preserves 
 information about other paths that might already be indexed
 (the ones printed by cindex -list).  The -reset flag causes cindex to
@@ -53,24 +57,51 @@ func usage() {
 	os.Exit(2)
 }
 
+type ignorePattern []string
+
+func (ip *ignorePattern) String() string {
+	return fmt.Sprint(*ip)
+}
+
+func (ip *ignorePattern) Set(value string) error {
+	*ip = append(*ip, value)
+	return nil
+}
+
 var (
-	listFlag    = flag.Bool("list", false, "list indexed paths and exit")
-	resetFlag   = flag.Bool("reset", false, "discard existing index")
-	verboseFlag = flag.Bool("verbose", false, "print extra information")
-	cpuProfile  = flag.String("cpuprofile", "", "write cpu profile to this file")
+	listFlag       = flag.Bool("list", false, "list indexed paths and exit")
+	listIgnoreFlag = flag.Bool("list-ignores", false, "list ignored patterns and exit")
+	resetFlag      = flag.Bool("reset", false, "discard existing index")
+	verboseFlag    = flag.Bool("verbose", false, "print extra information")
+	cpuProfile     = flag.String("cpuprofile", "", "write cpu profile to this file")
+
+	iFlag ignorePattern
 )
 
 func main() {
+	var ignorePatterns []*regexp.Regexp
+
 	flag.Usage = usage
+	flag.Var(&iFlag, "ignore", "Ignore filenames matching PATTERN")
 	flag.Parse()
 	args := flag.Args()
 
-	if *listFlag {
+	if *listFlag || *listIgnoreFlag {
 		ix := index.Open(index.File())
-		for _, arg := range ix.Paths() {
+		var what []string
+		if *listFlag {
+			what = ix.Paths()
+		} else {
+			what = ix.Ignores()
+		}
+		for _, arg := range what {
 			fmt.Printf("%s\n", arg)
 		}
 		return
+	}
+	// culo
+	if *listIgnoreFlag {
+
 	}
 
 	if *cpuProfile != "" {
@@ -91,6 +122,16 @@ func main() {
 		ix := index.Open(index.File())
 		for _, arg := range ix.Paths() {
 			args = append(args, arg)
+		}
+	}
+
+	if len(iFlag) > 0 {
+		for _, pattern := range iFlag {
+			ire, err := regexp.Compile(pattern)
+			if err != nil {
+				log.Fatal(err)
+			}
+			ignorePatterns = append(ignorePatterns, ire)
 		}
 	}
 
@@ -124,6 +165,7 @@ func main() {
 	ix := index.Create(file)
 	ix.Verbose = *verboseFlag
 	ix.AddPaths(args)
+	ix.AddIgnores(iFlag)
 	for _, arg := range args {
 		log.Printf("index %s", arg)
 		filepath.Walk(arg, func(path string, info os.FileInfo, err error) error {
@@ -136,6 +178,15 @@ func main() {
 					return nil
 				}
 			}
+			if len(ignorePatterns) > 0 {
+				for _, ip := range ignorePatterns {
+					if ip.MatchString(path, true, true) > 0 {
+						log.Printf("Ignoring %s\n", path)
+						return nil
+					}
+				}
+			}
+
 			if err != nil {
 				log.Printf("%s: %s", path, err)
 				return nil

@@ -8,8 +8,9 @@ package index
 //
 // An index stored on disk has the format:
 //
-//	"csearch index 1\n"
+//	"csearch index 2\n"
 //	list of paths
+//	list of ignore patterns
 //	list of names
 //	list of posting lists
 //	name index
@@ -58,6 +59,7 @@ package index
 // The trailer has the form:
 //
 //	offset of path list [4]
+//	offset of ignore pattern list [4]
 //	offset of name list [4]
 //	offset of posting lists [4]
 //	offset of name index [4]
@@ -75,21 +77,22 @@ import (
 )
 
 const (
-	magic        = "csearch index 1\n"
+	magic        = "csearch index 2\n"
 	trailerMagic = "\ncsearch trailr\n"
 )
 
 // An Index implements read-only access to a trigram index.
 type Index struct {
-	Verbose   bool
-	data      mmapData
-	pathData  uint32
-	nameData  uint32
-	postData  uint32
-	nameIndex uint32
-	postIndex uint32
-	numName   int
-	numPost   int
+	Verbose    bool
+	data       mmapData
+	pathData   uint32
+	nameData   uint32
+	postData   uint32
+	nameIndex  uint32
+	postIndex  uint32
+	ignoreData uint32
+	numName    int
+	numPost    int
 }
 
 const postEntrySize = 3 + 4 + 4
@@ -99,13 +102,14 @@ func Open(file string) *Index {
 	if len(mm.d) < 4*4+len(trailerMagic) || string(mm.d[len(mm.d)-len(trailerMagic):]) != trailerMagic {
 		corrupt()
 	}
-	n := uint32(len(mm.d) - len(trailerMagic) - 5*4)
+	n := uint32(len(mm.d) - len(trailerMagic) - 6*4)
 	ix := &Index{data: mm}
 	ix.pathData = ix.uint32(n)
-	ix.nameData = ix.uint32(n + 4)
-	ix.postData = ix.uint32(n + 8)
-	ix.nameIndex = ix.uint32(n + 12)
-	ix.postIndex = ix.uint32(n + 16)
+	ix.ignoreData = ix.uint32(n + 4)
+	ix.nameData = ix.uint32(n + 8)
+	ix.postData = ix.uint32(n + 12)
+	ix.nameIndex = ix.uint32(n + 16)
+	ix.postIndex = ix.uint32(n + 20)
 	ix.numName = int((ix.postIndex-ix.nameIndex)/4) - 1
 	ix.numPost = int((n - ix.postIndex) / postEntrySize)
 	return ix
@@ -141,6 +145,21 @@ func (ix *Index) uvarint(off uint32) uint32 {
 // Paths returns the list of indexed paths.
 func (ix *Index) Paths() []string {
 	off := ix.pathData
+	var x []string
+	for {
+		s := ix.str(off)
+		if len(s) == 0 {
+			break
+		}
+		x = append(x, string(s))
+		off += uint32(len(s) + 1)
+	}
+	return x
+}
+
+// Ignores returns the list of ignore patterns.
+func (ix *Index) Ignores() []string {
+	off := ix.ignoreData
 	var x []string
 	for {
 		s := ix.str(off)

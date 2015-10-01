@@ -24,9 +24,12 @@ var trivialFiles = map[string]string{
 
 var trivialIndex = join(
 	// header
-	"csearch index 1\n",
+	"csearch index 2\n",
 
 	// list of paths
+	"\x00",
+
+	// list of ignores
 	"\x00",
 
 	// list of names
