@@ -1,0 +1,38 @@
+{{define "base"}}<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <link rel="stylesheet" href="/static/css/bootstrap.css">
+    <link rel="stylesheet" href="/static/css/app.css">
+
+    {{template "extrahead"}}
+  </head>
+
+  <body>
+      <div class="container-fluid">
+          {{template "content" .}}
+      </div>
+      
+      <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.3/jquery.min.js"></script>
+      <script src="/static/js/oboe-browser.min.js"></script>
+      <script>
+       window.paceOptions = {
+           document: false,
+           startOnPageLoad: false
+       };
+      </script>
+      <script src="/static/js/pace.min.js"></script>
+      <script src="/static/js/bootstrap.min.js"></script>
+      {{template "js" .}}
+
+  </body>
+</html>{{end}}
+
+{{define "js"}}
+{{end}}
+
+{{define "extrahead"}}
+{{end}}
