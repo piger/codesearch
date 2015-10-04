@@ -5,14 +5,24 @@ $(document).ready(function() {
 
     // Oboe callbacks
     var onResult = function(result) {
-        resultList.append('<li><span class="result-filename">' + result.Filename + '</span> <span class="result-line">' + result.Line + '</span> <span class="result-match">' + result.Match + '</span></li>');
+        var out = [];
+        out.push('<li><span class="result-filename">');
+        out.push(result.Filename);
+        out.push('</span>');
+        out.push('<span class="result-line"><small>');
+        out.push(':' + result.Line);
+        out.push('</small></span> ');
+        out.push('<span class="result-match"><code>');
+        out.push(result.Match);
+        out.push('</code></span></li>');
+        resultList.append(out.join(''));
+
         return oboe.drop;
     };
 
     var onError = function(error) {
-        console.log("Uh, errors: " + errors);
         $("#searchForm .form-group").addClass("has-error");
-        $("#results-error").append('<div class="alert alert-warning" role="alert">' + errors + '</div>');
+        $("#results-error").append('<div class="alert alert-warning" role="alert">' + error + '</div>');
     };
 
     var onErrors = function() {
