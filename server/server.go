@@ -21,6 +21,19 @@ import (
 
 const staticPrefix = "/static/"
 
+type flushWriter struct {
+	f http.Flusher
+	w io.Writer
+}
+
+func (fw *flushWriter) Write(p []byte) (n int, err error) {
+	n, err = fw.w.Write(p)
+	if fw.f != nil {
+		fw.f.Flush()
+	}
+	return
+}
+
 type appContext struct {
 	idx       *index.Index
 	Templates map[string]*template.Template
@@ -89,7 +102,7 @@ type SearchResult struct {
 
 type SearchOptions struct{}
 
-func searchPattern(idx *index.Index, pattern string, options *SearchOptions, w http.ResponseWriter) ([]*SearchResult, error) {
+func searchPattern(idx *index.Index, pattern string, options *SearchOptions, w flushWriter) ([]*SearchResult, error) {
 	var results []*SearchResult
 	var stdout, stderr bytes.Buffer
 	bStdout := bufio.NewWriter(&stdout)
@@ -211,18 +224,26 @@ func searchHandler(a *appContext, w http.ResponseWriter, r *http.Request) (int, 
 		return 200, nil
 	}
 
-	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
-	fmt.Fprintln(w, "{")
+	// Use non buffered Write for this HTTP connection
+	fw := flushWriter{w: w}
+	if f, ok := w.(http.Flusher); ok {
+		fw.f = f
+	}
 
+	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
+	fmt.Fprintln(&fw, "{")
+
+	// Lock access to Index
 	a.Lock.Lock()
 	defer a.Lock.Unlock()
-	_, err = searchPattern(a.idx, sq.Query, &SearchOptions{}, w)
+
+	_, err = searchPattern(a.idx, sq.Query, &SearchOptions{}, fw)
 	if err != nil {
 		log.Printf("ERROR: %s\n", err.Error())
 		return http.StatusInternalServerError, err
 	}
 
-	fmt.Fprintln(w, "}")
+	fmt.Fprintln(&fw, "}")
 	return 200, nil
 }
 
