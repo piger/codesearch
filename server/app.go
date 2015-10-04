@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/piger/codesearch/index"
 	"github.com/piger/codesearch/regexp"
+	"html"
 	"io"
 	"io/ioutil"
 	"log"
@@ -76,7 +77,7 @@ func searchPattern(idx *index.Index, pattern string, options *SearchOptions, w f
 			sr := &SearchResult{
 				Filename: fields[0],
 				Line:     ln,
-				Match:    fields[2],
+				Match:    html.EscapeString(fields[2]),
 			}
 			results = append(results, sr)
 			jr, err := json.Marshal(sr)
